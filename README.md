@@ -1,151 +1,62 @@
-# SSLE-1 v2.1 — Sumai Sequential Learning Engine
+# SSLE-2 "Nexus" — rede neural própria para títulos (PT)
 
-Modelo de linguagem **probabilístico, leve e 100% CPU** (sem redes neurais
-profundas, sem GPU). Implementa a especificação SSLE-1 v2.1: uma cadeia de
-Markov n-gram com embeddings aprendidos por SGD, acrescida de um **Motor de
-Raciocínio Semântico** e um **Buffer de Contexto de Longo Alcance** que dão
-coerência e direcionamento temático à geração.
+Um **modelo de linguagem neural feito do zero em NumPy puro** — **sem PyTorch,
+sem transformer, sem LSTM/GRU, sem n-gram**. Autograd próprio (modo reverso),
+otimizador Adam próprio e uma arquitetura própria de **atenção + raciocínio +
+memória**, treinada num **corpus REAL** de títulos em português.
 
-> Em resumo: gera títulos/headlines temáticos (estilo conteúdo) treinando em
-> segundos numa CPU comum, com modelos de poucos MB.
+> "Um LLM, mas só para títulos": gera títulos novos, coerentes e condicionados a
+> **tema + palavras-chave**, aprendidos de texto real (não de templates).
 
----
+## Arquitetura (não é transformer)
 
-> ### Veja também: SSLE-2 "Nexus" — rede neural própria do zero
->
-> Para geração com aprendizado de língua **real** (não n-gram, não templates),
-> o repositório também traz a **SSLE-2 "Nexus"**: uma rede neural construída do
-> zero em NumPy puro — **autograd próprio, atenção própria (Resonance Attention),
-> memória de conceitos key-value e um loop de reasoning** — **sem PyTorch,
-> transformer, LSTM/GRU ou n-gram**. Treinada num corpus REAL de títulos em PT.
-> Veja [`ssle2/README.md`](ssle2/README.md) e o benchmark Nano vs Base em
-> [`benchmarks/RESULTS_NEXUS.md`](benchmarks/RESULTS_NEXUS.md).
+| Componente | O que faz |
+|---|---|
+| **Resonance Attention** | atenção causal multi-cabeça envolta numa **porta GLU** — cada posição decide quanto do contexto atendido admitir. |
+| **Concept Memory** | banco de **slots key-value treináveis** lido por atenção de conteúdo (conhecimento global, separado da self-attention). |
+| **Reasoning Loop (weight-tied)** | o **mesmo bloco aplicado R vezes** como refinamento iterativo do estado latente — profundidade = passos de raciocínio, não nº de parâmetros. |
 
-## Arquitetura
+Tudo roda sobre o autograd escrito à mão em `nn/` (verificado por
+gradient-checking em `tests/test_autograd.py`).
+
+## Estrutura
 
 ```
-INPUT → TOKENIZER → EMBEDDING LAYER → CONTEXT ENCODER → SEMANTIC REASONING ENGINE
-→ TRANSITION MATRIX (N-gram) → LONG-RANGE CONTEXT BUFFER → PATTERN MEMORY
-→ SAMPLING ENGINE → OUTPUT
-```
-
-Componentes (em `core/`):
-
-| Módulo | Arquivo | Função |
-|---|---|---|
-| Tokenizer | `tokenizer.py` | uppercase → remove acentos (NFD) → remove pontuação → split. Tokens especiais PAD/UNK/BOS/EOS/SEP. |
-| Embeddings + Encoder | `encoder.py` | Init Xavier, update SGD; média ponderada de contexto + viés por similaridade de cosseno. |
-| Transition Matrix | `matrix.py` | Contagens n-gram com **backoff** (ordem N→N-1→…→unigrama) + logits aprendidos. |
-| Semantic Reasoning | `semantic.py` | Concept Graph (coocorrência + cosseno), inferência de intenção, coerência, memória temática. |
-| Long-Range Buffer | `buffer.py` | 4 camadas: recente, janela deslizante, resumo comprimido (decay) e âncoras semânticas. |
-| Theme Profiles | `theme.py` | Prior PMI por tema, aprendido do dataset — direciona o vocabulário para o tema pedido. |
-| Pattern Memory | `memory.py` | Abstração de templates com `success_score = freq / (1 + avg_nll)`. |
-| Sampling | `sampler.py` | softmax(temperature) → penalidade de repetição → top-k → top-p (nucleus). |
-| Engine | `engine.py` | Unifica tudo; serialização `.snm` (JSON gzip). |
-| Trainer | `trainer.py` | Loop de treino: contagens + grafo + atualização de gradiente token a token. |
-
-## Instalação
-
-```bash
-pip install -r requirements.txt   # apenas numpy
+nn/                framework neural próprio (autograd, módulos, Adam)
+ssle2/             tokenizer BPE, dados, modelo NexusLM, treino, geração, serialização
+data/raw_titles/   corpus real de títulos em PT (um título por linha)
+models/            checkpoints .nx treinados (nano, base)
+benchmarks/        benchmark_nexus.py + RESULTS_NEXUS.md
+train_nexus.py     CLI de treino
+gen_nexus.py       CLI de geração
 ```
 
 ## Uso
 
-### 1. Gerar um dataset (.sds2)
-
 ```bash
-python scripts/dataset_gen.py --count 6000 --output data/dataset.sds2
+# treinar
+python train_nexus.py --preset nano --epochs 10 --out models/nexus_nano.nx
+python train_nexus.py --preset base --epochs 8  --out models/nexus_base.nx
+
+# gerar
+python gen_nexus.py --model models/nexus_base.nx --theme ESPORTE --keywords brasil copa --n 5
+
+# benchmark Nano vs Base
+python benchmarks/benchmark_nexus.py
 ```
 
-Formato `.sds2`:
+Para treinar com seus próprios dados, coloque arquivos `.txt` (um título por
+linha) em `data/raw_titles/` e rode o treino novamente. Temas disponíveis:
+`TURISMO`, `ESPORTE`, `CULTURA`, `SAUDE`, `GERAL`.
 
-```
-[SAMPLE]
-theme=FORTNITE
-context=MIRA|CONSTRUCAO|RANKED|DICAS
-target=COMO MELHORAR SUA MIRA NO FORTNITE EM 2025
-weight=1.0
-[/SAMPLE]
-```
+| Preset | vocab | dim | heads | reasoning | memory | params |
+|---|---|---|---|---|---|---|
+| nano | 4.000 | 96 | 4 | 2 | 24 | ~0.9M |
+| base | 8.000 | 192 | 6 | 3 | 56 | ~3.8M |
 
-### 2. Treinar
+Detalhes de arquitetura: [`ssle2/README.md`](ssle2/README.md) ·
+Benchmark completo: [`benchmarks/RESULTS_NEXUS.md`](benchmarks/RESULTS_NEXUS.md).
 
-```bash
-# Nano (vocab 5k, dim 64, n=2)
-python train.py --dataset data/dataset.sds2 --epochs 8 \
-    --n-order 2 --dim 64 --vocab 5000 --output models/ssle_nano.snm
+## Requisitos
 
-# Base (vocab 20k, dim 256, n=3)
-python train.py --dataset data/dataset.sds2 --epochs 8 \
-    --n-order 3 --dim 256 --vocab 20000 --output models/ssle_base.snm
-```
-
-### 3. Gerar texto
-
-```bash
-python generate.py --model models/ssle_base.snm \
-    --theme FORTNITE --context "MIRA RANKED DICAS" \
-    --temperature 0.8 --top-k 10 --top-p 0.9 --count 5
-```
-
-### 4. Avaliar e comparar (benchmark)
-
-```bash
-python scripts/eval.py --model models/ssle_base.snm --dataset data/dataset.sds2
-python benchmarks/benchmark.py --dataset data/dataset.sds2 --epochs 8 --presets nano base
-```
-
-## Presets
-
-| Preset | vocab | dim | n-gram |
-|---|---|---|---|
-| nano | 5.000 | 64 | 2 |
-| mini | 10.000 | 128 | 3 |
-| base | 20.000 | 256 | 3 |
-| medium | 50.000 | 256 | 4 |
-| large | 100.000 | 512 | 5 |
-
-## Benchmark Nano vs Base
-
-Resultados completos em [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md)
-(dataset de 6.000 amostras, 8 épocas, CPU). Resumo:
-
-| Métrica | Nano | Base |
-|---|---|---|
-| Tamanho do modelo | ~0.2 MB | ~0.6 MB |
-| Loss final | ~1.98 | **~1.78** |
-| Perplexidade ↓ | ~7.3 | **~5.7** |
-| Geração | ~130 tok/s | ~130 tok/s |
-
-O **Base** (n-gram de ordem 3 + embeddings maiores) tem perplexidade
-significativamente menor e gera títulos mais coerentes e fiéis ao tema; o
-**Nano** treina/serializa menor e é ideal para protótipos.
-
-Exemplo (tema FORTNITE, base):
-
-```
-COMO TREINAR SUA ESTRATEGIA
-O METODO INACREDITAVEL PARA OTIMIZAR SUA ECONOMIA NO PC
-5 FORMAS DE TREINAR EDICAO
-```
-
-## Modelo `.snm`
-
-Arquivo único **JSON comprimido com gzip** contendo: versão, config, vocabulário
-do tokenizer, pesos dos embeddings, contagens/logits da matriz, grafo de
-conceitos, perfis temáticos, padrões e estatísticas de treino.
-
-## Testes
-
-```bash
-python -m pytest tests/ -q
-ruff check .
-```
-
-## Observação sobre o vocabulário
-
-O gerador de dataset usa templates composicionais, então o vocabulário efetivo
-é compacto (centenas de tokens). A engine suporta vocabulários de até 100k
-tokens (preset `large`) — basta treinar em um corpus real maior para explorar
-toda a capacidade dos presets `base`/`medium`/`large`.
+Python ≥ 3.10 e NumPy. `pip install -r requirements.txt`.
