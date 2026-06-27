@@ -9,6 +9,18 @@ coerência e direcionamento temático à geração.
 > Em resumo: gera títulos/headlines temáticos (estilo conteúdo) treinando em
 > segundos numa CPU comum, com modelos de poucos MB.
 
+---
+
+> ### Veja também: SSLE-2 "Nexus" — rede neural própria do zero
+>
+> Para geração com aprendizado de língua **real** (não n-gram, não templates),
+> o repositório também traz a **SSLE-2 "Nexus"**: uma rede neural construída do
+> zero em NumPy puro — **autograd próprio, atenção própria (Resonance Attention),
+> memória de conceitos key-value e um loop de reasoning** — **sem PyTorch,
+> transformer, LSTM/GRU ou n-gram**. Treinada num corpus REAL de títulos em PT.
+> Veja [`ssle2/README.md`](ssle2/README.md) e o benchmark Nano vs Base em
+> [`benchmarks/RESULTS_NEXUS.md`](benchmarks/RESULTS_NEXUS.md).
+
 ## Arquitetura
 
 ```
