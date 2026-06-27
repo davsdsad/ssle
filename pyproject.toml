@@ -1,0 +1,17 @@
+[project]
+name = "ssle"
+version = "2.1.0"
+description = "SSLE-1 v2.1 — Sumai Sequential Learning Engine (CPU probabilistic language model)"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E741"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

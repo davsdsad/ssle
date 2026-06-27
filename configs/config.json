@@ -1,0 +1,23 @@
+{
+  "n_order": 3,
+  "embedding_dim": 128,
+  "vocab_size": 15000,
+  "lr": 0.001,
+  "top_k": 10,
+  "top_p": 0.9,
+  "temperature": 0.8,
+  "repeat_decay": 0.7,
+  "smoothing": 0.1,
+  "buffer_window": 50,
+  "decay_factor": 0.995,
+  "coherence_thr": 0.15,
+  "anchor_weight": 0.5,
+  "theme_strength": 0.6,
+  "presets": {
+    "nano":   { "vocab_size": 5000,  "embedding_dim": 64,  "n_order": 2 },
+    "mini":   { "vocab_size": 10000, "embedding_dim": 128, "n_order": 3 },
+    "base":   { "vocab_size": 20000, "embedding_dim": 256, "n_order": 3 },
+    "medium": { "vocab_size": 50000, "embedding_dim": 256, "n_order": 4 },
+    "large":  { "vocab_size": 100000,"embedding_dim": 512, "n_order": 5 }
+  }
+}
